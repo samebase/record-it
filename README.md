@@ -31,7 +31,8 @@ Paste this into your AI coding agent (Claude Code, Codex, Cursor...):
 You'll need macOS 14 or later and Xcode or its Command Line Tools with Swift 5.10
 or later. Install the command-line tools with `xcode-select --install` if needed.
 Video recording needs a hardware H.264 or HEVC encoder. Camera and audio-only
-takes also need a separate built-in microphone for the recovery recording.
+takes need one microphone. A separate built-in microphone is used for recovery
+audio when available.
 
 ```bash
 git clone https://github.com/mikecann/record-it.git
@@ -88,8 +89,8 @@ You can also use `record-it restart`, `record-it stop`, or `record-it setup`.
 - Selectable screen audio: **System Sound** or **None**. System Sound captures
   playback from music, browsers, videos, and other Mac apps, not a microphone
 - Selectable camera microphone, defaulting to the first input with `Yeti` in its
-  name. Camera and audio-only recordings require a primary microphone and a
-  separate built-in recovery microphone
+  name. Camera and audio-only recordings need only the selected microphone.
+  A separate built-in microphone adds a recovery recording when available
 - Audio-only mode records AAC in an `audio.m4a` file, preserving the input's
   sample rate and channel count. Mono uses 96 kbps, other channel counts use
   128 kbps. It does not require a display, camera, or video encoder
@@ -181,10 +182,11 @@ Camera and audio-only recordings also show a live waveform from the selected
 microphone. It updates ten times per second and keeps a short rolling history
 so speech and silence are visible.
 
-Every camera or audio-only take requires a second physical input. Record It
-uses the built-in MacBook Pro microphone and launches a separate helper process
-using `AVAudioEngine`, independent of the primary `AVCaptureSession`. The helper
-writes a lossless mono recovery track to:
+When the built-in MacBook Pro microphone is available and is not the selected
+microphone, Record It uses it for backup audio. If no separate recovery microphone
+is available, the take records with the selected microphone alone. The backup
+runs in a separate helper process using `AVAudioEngine`, independent of the
+primary `AVCaptureSession`. The helper writes a lossless mono recovery track to:
 
 ```text
 ~/Library/Application Support/Record It/Recovery Audio/
@@ -192,8 +194,8 @@ writes a lossless mono recovery track to:
 
 Recovery tracks use the take name with `-backup-audio.caf`, are intentionally
 not opened in Finder after a normal take, and are retained for 14 days. Expired
-finalized recovery tracks are removed when a new recording begins. Record It
-refuses to start without a distinct built-in recovery microphone. The helper
+finalized recovery tracks are removed when a new recovery recording begins.
+If backup setup fails, the main recording continues with a quiet warning. The helper
 records through problems and reports them as quiet warnings, since a backup
 glitch never damages the main files. If Record It crashes, the helper notices
 and closes the backup file cleanly.

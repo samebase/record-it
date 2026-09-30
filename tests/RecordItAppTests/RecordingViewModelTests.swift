@@ -121,20 +121,21 @@ final class RecordingViewModelTests: XCTestCase {
         ))
     }
 
-    func testCameraModeCannotStartWithoutASeparateRecoveryMicrophone() {
-        XCTAssertFalse(recordingPrerequisitesAreAvailable(
-            mode: .camera,
-            screenCaptureTargetKind: .display,
-            hasDestination: true,
-            hasValidFileName: true,
-            hasVideoEncoder: true,
-            hasDisplay: false,
-            hasWindow: false,
-            hasCamera: true,
-            hasAudioInput: true,
-            hasRecoveryAudioInput: false,
-            isBusy: false
-        ))
+    func testCameraBothAndAudioModesCanStartWithOnlyThePrimaryMicrophone() {
+        for mode in [RecordingMode.camera, .both, .audio] {
+            XCTAssertTrue(recordingPrerequisitesAreAvailable(
+                mode: mode,
+                screenCaptureTargetKind: .display,
+                hasDestination: true,
+                hasValidFileName: true,
+                hasVideoEncoder: true,
+                hasDisplay: true,
+                hasWindow: false,
+                hasCamera: true,
+                hasAudioInput: true,
+                isBusy: false
+            ), "\(mode.displayName) should need only the selected microphone.")
+        }
     }
 
     func testCameraModeCannotStartWithoutPrimaryAudio() {
@@ -148,7 +149,6 @@ final class RecordingViewModelTests: XCTestCase {
             hasWindow: false,
             hasCamera: true,
             hasAudioInput: false,
-            hasRecoveryAudioInput: true,
             isBusy: false
         ))
     }

@@ -16,7 +16,6 @@ func recordingPrerequisitesAreAvailable(
     hasWindow: Bool,
     hasCamera: Bool,
     hasAudioInput: Bool,
-    hasRecoveryAudioInput: Bool = true,
     isBusy: Bool
 ) -> Bool {
     guard hasDestination, hasValidFileName, !isBusy else { return false }
@@ -30,7 +29,6 @@ func recordingPrerequisitesAreAvailable(
     }
     if mode.capturesCamera && !hasCamera { return false }
     if (mode.capturesCamera || mode.capturesAudio), !hasAudioInput { return false }
-    if (mode.capturesCamera || mode.capturesAudio), !hasRecoveryAudioInput { return false }
     return true
 }
 
@@ -170,7 +168,6 @@ final class RecordingViewModel: ObservableObject {
             hasWindow: selectedWindow != nil,
             hasCamera: selectedCamera != nil,
             hasAudioInput: selectedMicrophone != nil,
-            hasRecoveryAudioInput: recoveryMicrophone != nil,
             isBusy: isBusy
         )
     }
@@ -260,6 +257,7 @@ final class RecordingViewModel: ObservableObject {
         captureProblems = []
         pendingProblemAlert = nil
         let startedAt = Date()
+        var recoveryStartupError: Error?
 
         do {
             let outputDirectory = try prepareOutputDirectory(for: destination)
@@ -271,7 +269,6 @@ final class RecordingViewModel: ObservableObject {
                 )
             }
             let recoveryDirectory = recoveryAudioDirectory()
-            try cleanupExpiredRecoveryAudio(in: recoveryDirectory)
             let recordingMode = mode
             let outputBaseName = availableRecordingBaseName(requestedBaseName) { candidate in
                 let urls = Array(recordingOutputURLs(
@@ -293,16 +290,10 @@ final class RecordingViewModel: ObservableObject {
                 baseName: outputBaseName
             )
             var recorders: [any CaptureRecording] = []
-            let startGate = mode == .both ? RecordingStartGate() : nil
+            let startGate = mode.capturesCamera ? RecordingStartGate() : nil
             var recoveryAudio: RecoveryAudioRecording?
 
-            if mode.capturesCamera || mode.capturesAudio {
-                guard let recoveryMicrophone else {
-                    throw RecordItError.message(
-                        "A separate MacBook Pro microphone is required for recovery audio. "
-                            + "Record It will not begin without an independent backup input."
-                    )
-                }
+            if (mode.capturesCamera || mode.capturesAudio), let recoveryMicrophone {
                 let recoveryURL = recoveryAudioURL(
                     baseName: outputBaseName,
                     directory: recoveryDirectory
@@ -316,8 +307,15 @@ final class RecordingViewModel: ObservableObject {
                         }
                     }
                 )
-                activeRecoveryAudio = recoveryAudio
-                try await recoveryAudio?.start()
+                do {
+                    try cleanupExpiredRecoveryAudio(in: recoveryDirectory)
+                    try await recoveryAudio?.start()
+                    activeRecoveryAudio = recoveryAudio
+                } catch {
+                    try? await recoveryAudio?.stop()
+                    recoveryAudio = nil
+                    recoveryStartupError = error
+                }
             }
 
             if mode.capturesScreen {
@@ -425,6 +423,9 @@ final class RecordingViewModel: ObservableObject {
             statusMessage = "Ready to record"
         }
         isBusy = false
+        if let recoveryStartupError {
+            handleCaptureProblem(recoveryStartupError, source: .recoveryAudio)
+        }
     }
 
     func stopRecording(revealInFinder: Bool = true) async {

@@ -150,7 +150,9 @@ final class MovieWriter {
         if sessionStartTime == nil {
             if let startGate {
                 guard let gatedStartTime = startGate.startTime, sourceTimestamp >= gatedStartTime else {
-                    return false
+                    // Startup samples are intentionally skipped. Only an actual
+                    // writer rejection should count toward an encoder alarm.
+                    return true
                 }
                 sessionStartTime = gatedStartTime
                 writer.startSession(atSourceTime: gatedStartTime)
