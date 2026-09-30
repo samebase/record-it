@@ -403,10 +403,10 @@ struct RecordItView: View {
                     VStack(alignment: .leading, spacing: 5) {
                         Text(model.recoveryMicrophone?.name ?? "No separate recovery microphone")
                         Text(model.recoveryMicrophone.map { _ in
-                            "Required lossless backup · separate helper process · kept for 14 days"
-                        } ?? "Recording is disabled until the MacBook Pro microphone is available")
+                            "Lossless backup · kept for 14 days"
+                        } ?? "Recording will use the selected microphone")
                             .font(.caption)
-                            .foregroundStyle(model.recoveryMicrophone == nil ? Color.red : Color.secondary)
+                            .foregroundStyle(.secondary)
                     }
                 }
             }

@@ -93,7 +93,8 @@ later rebuilds keep the grant.
   shared rate control for the screen only; the camera keeps CBR/CQP/VBR.
   Do not route screen capture back through a fixed QP: CQP 30 produced
   under 1 Mbps screen files with blocky gradients at 2-3× zoom.
-- Camera and audio-only takes require a distinct built-in recovery microphone.
+- Camera and audio-only takes need only the selected microphone. A distinct
+  built-in microphone is used for recovery audio when available.
   The independently signed helper writes recovery audio under
   `~/Library/Application Support/Record It/Recovery Audio/`.
 - Projects come from `~/dev/convex/convex-videos`, newest creation date first.
