@@ -76,6 +76,70 @@ final class MovieWriterIntegrationTests: XCTestCase {
         XCTAssertEqual(frameCount, 3, "Sparse screen updates should not manufacture catch-up frames.")
     }
 
+    func testWriterSkipsStartupFramesWithoutReportingEncoderFailures() async throws {
+        let outputURL = FileManager.default.temporaryDirectory
+            .appendingPathComponent("record-it-startup-\(UUID().uuidString).mov")
+        defer { try? FileManager.default.removeItem(at: outputURL) }
+        let encoder = try XCTUnwrap(preferredHardwareVideoEncoder(
+            in: HardwareVideoEncoderCatalog.availableEncoders(),
+            savedID: ""
+        ))
+        let gate = RecordingStartGate()
+        let writer = try MovieWriter(
+            outputURL: outputURL,
+            width: 128,
+            height: 128,
+            includesAudio: false,
+            encoderConfiguration: EncoderConfiguration(
+                encoder: encoder,
+                rateControl: preferredRateControl(
+                    savedMode: .vbr,
+                    supportedModes: encoder.supportedRateControls
+                ) ?? .cbr,
+                bitRateMbps: 10,
+                maximumBitRateMbps: 15,
+                qualityParameter: 20
+            ),
+            startGate: gate
+        )
+
+        let startTime = CMTime(seconds: 3_350_192.466667, preferredTimescale: 600)
+        var health = MediaCaptureHealthState(startedAt: 0)
+        for frame in 0..<60 {
+            if frame == 3 { gate.open(at: startTime) }
+            let accepted = writer.appendVideo(try videoSampleBuffer(frame: frame, width: 128, height: 128))
+            health.recordVideoAppend(accepted: accepted)
+        }
+        XCTAssertNil(health.problem(at: 1), "Startup drops must not be reported as encoder failures.")
+        XCTAssertEqual(writer.progress().videoSamplesWritten, 0)
+
+        for frame in 0..<3 {
+            XCTAssertTrue(writer.appendVideo(try videoSampleBuffer(
+                frame: frame,
+                width: 128,
+                height: 128,
+                startTime: startTime
+            )))
+        }
+        try await writer.finish()
+
+        let asset = AVURLAsset(url: outputURL)
+        let duration = try await asset.load(.duration)
+        XCTAssertEqual(duration.seconds, 0.1, accuracy: 0.002)
+        let tracks = try await asset.loadTracks(withMediaType: .video)
+        let track = try XCTUnwrap(tracks.first)
+        let reader = try AVAssetReader(asset: asset)
+        let output = AVAssetReaderTrackOutput(
+            track: track,
+            outputSettings: [kCVPixelBufferPixelFormatTypeKey as String: kCVPixelFormatType_32BGRA]
+        )
+        reader.add(output)
+        XCTAssertTrue(reader.startReading())
+        var frameCount = 0
+        while output.copyNextSampleBuffer() != nil { frameCount += 1 }
+        XCTAssertEqual(frameCount, 3, "Only frames from the recording timeline should reach the file.")
+    }
+
     func testWriterPreservesALongStaticGapWithoutEncodingHundredsOfDuplicateFrames() async throws {
         let outputURL = FileManager.default.temporaryDirectory
             .appendingPathComponent("record-it-static-gap-\(UUID().uuidString).mov")
@@ -238,7 +302,7 @@ final class MovieWriterIntegrationTests: XCTestCase {
     }
 }
 
-private func videoSampleBuffer(frame: Int, width: Int, height: Int) throws -> CMSampleBuffer {
+private func videoSampleBuffer(frame: Int, width: Int, height: Int, startTime: CMTime = .zero) throws -> CMSampleBuffer {
     var pixelBuffer: CVPixelBuffer?
     let attributes: [CFString: Any] = [
         kCVPixelBufferCGImageCompatibilityKey: true,
@@ -276,7 +340,7 @@ private func videoSampleBuffer(frame: Int, width: Int, height: Int) throws -> CM
 
     var timing = CMSampleTimingInfo(
         duration: CMTime(value: 1, timescale: 30),
-        presentationTimeStamp: CMTime(value: CMTimeValue(frame), timescale: 30),
+        presentationTimeStamp: startTime + CMTime(value: CMTimeValue(frame), timescale: 30),
         decodeTimeStamp: .invalid
     )
     var sampleBuffer: CMSampleBuffer?

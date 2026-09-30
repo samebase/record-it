@@ -293,7 +293,7 @@ final class RecordingViewModel: ObservableObject {
                 baseName: outputBaseName
             )
             var recorders: [any CaptureRecording] = []
-            let startGate = mode == .both ? RecordingStartGate() : nil
+            let startGate = mode.capturesCamera ? RecordingStartGate() : nil
             var recoveryAudio: RecoveryAudioRecording?
 
             if mode.capturesCamera || mode.capturesAudio {
